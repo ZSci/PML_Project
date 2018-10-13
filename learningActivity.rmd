@@ -1,0 +1,123 @@
+---
+title: "trainingForActivity"
+author: "Kalyan Pagadala"
+date: "October 13, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Learning Activites
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+##Data Fetch:
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+```{r fetch_data}
+suppressWarnings(suppressMessages(library(caret)))
+suppressWarnings(suppressMessages(library(randomForest)))
+suppressWarnings(suppressMessages(library(e1071)))
+
+if(!file.exists("activityTrain.csv")){
+  download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", "activityTrain.csv")
+
+  download.file("https://d396qusza40orc.cloudfront.net/pre  dmachlearn/pml-testing.csv", "activityTest.csv")
+}
+
+train <- read.csv('activityTrain.csv', na.strings = c("NA", "#DIV/0!", ""))
+test <- read.csv('activityTest.csv', na.strings = c("NA", "#DIV/0!", ""))
+```
+
+##Cleaning the Data
+
+The data when explored in an Excel sheet shows many NA values and columns which are mostly empty. Some columns do not have relevant information for the prdiction purposes, such as: serial numbers, date of the record etc... 
+
+Removing such (mostly) empty as well as irrelevant columns increases the accuracy of prediction.
+
+```{r data_exploration}
+dim(train)
+dim(test)
+
+#str(train)
+
+#Remove the serial number and date/time columns
+train <- train[, -c(1,3:7)]
+test  <- test [, -c(1,3:7)]
+
+#Remove columns with mostly NA values
+train <- train[, colSums(is.na(train)) == 0]
+test  <- test [, colSums(is.na(test))  == 0]
+
+
+dim(train)
+dim(test)
+
+```
+
+Hence, the number of features in the dataset has been successfully reduced from 160 to 54, which is computationally more feasible and practical.
+
+The train set is partitioned into a train and test set to test our models.The partition is done 80-20
+
+```{r part_data}
+
+set.seed(60606)
+
+indices <- createDataPartition(y=train$classe, p=0.8, list = FALSE)
+
+train.data <- train[indices, ]
+test.data  <- train[-indices,]
+
+dim(train.data)
+dim(test.data)
+
+```
+
+## Prediction Model
+
+The problem is classification based. So, a classification model like 'trees' would be suitable. Random forests is chosen to be the model as it can take into account the multiple variables and also does random sampling with replacement(bootstrapping).
+
+Before training the model, a control function and pre-processing the data helps in faster training
+
+```{r model}
+
+conFun <- trainControl(method='cv', 5)
+pre.proc <- c('center', 'scale')
+
+pred.model <- train(classe~.,
+                    data=train.data,
+                    method = 'rf',
+                    proxy=TRUE,
+                    trControl=conFun,
+                    preProcess=pre.proc,
+                    ntree=128)
+
+pred.model
+
+
+```
+Applying the model on the test data gives the out of saple errors and a better accuracy metric for the trained model.
+
+```{r model_test} 
+
+test.preds <- predict(pred.model, test.data)
+confusionMatrix(test.preds, test.data$classe)
+
+```
+An accuracy of 99.62% is observes.The trained model is able to predict well for new data which wasn't shown during the training phase.
+
+##Test Data Set
+The model is used to predict the classe for the test set provided.
+
+```{r test_preds}
+predict(pred.model, test)
+```
